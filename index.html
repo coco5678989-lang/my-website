@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 醫療急救小助手</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        
+        /* 聊天視窗主體 */
+        .chat-container { width: 450px; height: 600px; background-color: white; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* 上方標題列 */
+        .chat-header { background: linear-gradient(135deg, #ff4d4d, #ff7373); color: white; padding: 20px; text-align: center; font-size: 1.2rem; font-weight: bold; letter-spacing: 1px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        
+        /* 對話內容區 */
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; background-color: #f9f9f9; }
+        
+        /* 基礎訊息氣泡 */
+        .message { max-width: 75%; padding: 12px 16px; border-radius: 14px; font-size: 0.95rem; line-height: 1.5; word-wrap: break-word; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* 使用者氣泡（右側藍色） */
+        .user-message { background-color: #0084ff; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        
+        /* 機器人氣泡（左側灰色） */
+        .bot-message { background-color: #e4e6eb; color: #050505; align-self: flex-start; border-bottom-left-radius: 2px; white-space: pre-line; }
+        
+        /* 下方輸入列 */
+        .chat-input-area { padding: 15px; background-color: white; border-top: 1px solid #eee; display: flex; gap: 10px; align-items: center; }
+        input { flex: 1; padding: 12px 18px; border: 1px solid #ccd0d5; border-radius: 24px; font-size: 0.95rem; outline: none; transition: border 0.2s; }
+        input:focus { border-color: #0084ff; }
+        
+        /* 送出按鈕 */
+        button { background-color: #0084ff; color: white; border: none; padding: 12px 20px; border-radius: 24px; font-size: 0.95rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button:hover { background-color: #0066cc; }
+        button:disabled { background-color: #bcc0c4; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-header">🚑 🚨 AI 醫療急救小助手</div>
+    <div class="chat-messages" id="chatMessages">
+        <div class="message bot-message">您好！我是您的 AI 急救助手。請問您目前遇到了什麼緊急健康狀況？（例如：燙傷、腳扭傷等）</div>
+    </div>
+    <div class="chat-input-area">
+        <input type="text" id="userInput" placeholder="請輸入您的問題..." onkeypress="if(event.key === 'Enter') sendMessage()">
+        <button id="sendBtn" onclick="sendMessage()">送出</button>
+    </div>
+</div>
+
+<script>
+    const API_URL = "https://se3dt5kzsl.execute-api.ap-northeast-1.amazonaws.com/emergency";
+    const chatMessages = document.getElementById("chatMessages");
+    const userInput = document.getElementById("userInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    async function sendMessage() {
+        const query = userInput.value.trim();
+        if (!query) return;
+
+        // 1. 顯示使用者的問題在畫面上
+        appendMessage(query, "user-message");
+        userInput.value = "";
+        
+        // 鎖定輸入框與按鈕，防止重複發送
+        userInput.disabled = true;
+        sendBtn.disabled = true;
+
+        // 2. 顯示機器人正在思考的狀態
+        const typingId = appendMessage("思考中...", "bot-message");
+
+        try {
+            // 3. 正式呼叫你的 AWS API Gateway
+            const response = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    query: query,
+                    user_id: "beautiful_web_user" // 這裡傳入你定義的用戶 ID 供 CloudWatch 追蹤
+                })
+            });
+
+            const data = await response.json();
+            
+            // 移除思考中文字，換成真正的 AI 答案
+            document.getElementById(typingId).remove();
+            
+            if (data.answer) {
+                appendMessage(data.answer, "bot-message");
+            } else {
+                appendMessage("系統回應格式異常，請再試一次。", "bot-message");
+            }
+
+        } catch (error) {
+            console.error("Error:", error);
+            document.getElementById(typingId).remove();
+            appendMessage("連線失敗，請檢查 API 狀態或網路連線。", "bot-message");
+        } finally {
+            // 解鎖輸入
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
+        }
+    }
+
+    // 輔助函式：新增訊息氣泡並自動滾動到底部
+    function appendMessage(text, className) {
+        const messageDiv = document.createElement("div");
+        const id = "msg-" + Date.now();
+        messageDiv.id = id;
+        messageDiv.className = `message ${className}`;
+        messageDiv.textContent = text;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return id;
+    }
+</script>
+
+</body>
+</html>
